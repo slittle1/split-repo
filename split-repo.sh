@@ -1,5 +1,11 @@
 #!/bin/bash
 
+#
+# Copyright (c) 2018 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 # Extract subtrees from a git repository(s) and move them into a new or
 # othe pre-existing repository.
 #
@@ -31,7 +37,7 @@
 #
 # This tool uses filter_git_history.sh from OpenStack's oslo.tools library.
 # It can be obtained from https://opendev.org/openstack/oslo.tools.git.
-# Clone it, and set environmnten variable OSLO_TOOLS pointing to the top 
+# Clone it, and set environment variable OSLO_TOOLS pointing to the top 
 # directory of the oslo.tools repo.
 
 # set -x

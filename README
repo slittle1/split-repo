@@ -1,0 +1,34 @@
+Extract subtrees from a git repository(s) and move them into a new or
+othe pre-existing repository.
+
+split-repo.sh new-repo.map [branch]
+
+The map file has four parts per line separated by a pipe ('|') character.
+The four fields are:
+1) Path to the root of the source repository
+2) Relative path to the subdirectory within the source repository that is
+   to be moved
+3) Path to the roo of the destination repository. If non-existant, a new repo
+   will be created.
+4) Relative path under the destination repository where the relocated subtree
+   is to be placed.
+
+e.g.
+  cat new-repo.map
+  stx/stx-integ|base/centos-release-config|stx/stx-config-files|centos-release-config
+  stx/stx-integ|base/dhcp-config|stx/stx-config-files|dhcp-config
+  stx/stx-integ|utilities/build-info|stx/stx-utilities|utilities/build-info
+  stx/stx-config|pm-qos-mgr|stx/stx-utilities|utilities/pm-qos-mgr
+
+This will create repos stx-config-files and stx-utilities. Subdirectories
+base/centos-release-config and base/dhcp-config are moved from stx-integ into
+stx-config-files, dropping the 'base/' prefix.  Subdirectory utilities/build-info
+is moved from stx-integ to stx-utilities at the same relative path.  Finally
+pm-qos-mgr is moved from stx-config, under the utilities subdirectory of 
+stx-utilities.
+
+This tool uses filter_git_history.sh from OpenStack's oslo.tools library.
+It can be obtained from https://opendev.org/openstack/oslo.tools.git.
+Clone it, and set environment variable OSLO_TOOLS pointing to the top 
+directory of the oslo.tools repo.
+
