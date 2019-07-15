@@ -1,11 +1,5 @@
 #!/bin/bash
 
-#
-# Copyright (c) 2018 Wind River Systems, Inc.
-#
-# SPDX-License-Identifier: Apache-2.0
-#
-
 # Extract subtrees from a git repository(s) and move them into a new or
 # othe pre-existing repository.
 #
@@ -130,9 +124,122 @@ function merge_repo {
     done
 }
 
-# Loop through source subtrees
+fixup_pkg_dirs () {
+    local src_repo=$1
+    local dest_repo=$2
+    local src_cfg=""
+    local dest_cfg=""
+    local mapping=""
+    local src_path=""
+    local dest_path=""
+
+    for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_pkg_dirs*"); do
+        dest_cfg="$dest_repo/$(basename $src_cfg)"
+        for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
+            src_path=${mapping%#*}
+            dest_path=${mapping##*#}
+            if grep -q "^$src_path$" $src_cfg; then
+                 grep "^$src_path$" $src_cfg | sed "s#^$src_path\$#$dest_path#" >> $dest_cfg
+                 ( cd $(dirname $dest_cfg); git add $(basename $dest_cfg) )
+                 sed "/^${src_path//\//\\/}$/d" -i $src_cfg
+                 ( cd $(dirname $src_cfg); git add $(basename $src_cfg) )
+            fi
+        done
+    done
+}
+
+fixup_wheels_inc () {
+    local src_repo=$1
+    local dest_repo=$2
+    local src_cfg=""
+    local dest_cfg=""
+    local mapping=""
+    local src_whl=""
+    local dest_whl=""
+
+    for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_*_wheels.inc"); do
+        dest_cfg="$dest_repo/$(basename $src_cfg)"
+        for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
+            src_whl=$(basename ${mapping%#*})-wheels
+            dest_whl=$(basename ${mapping##*#})-wheels
+            if grep -q "^$src_whl$" $src_cfg; then
+                 grep "^$src_whl$" $src_cfg | sed "s#^$src_whl\$#$dest_whl#" >> $dest_cfg
+                 ( cd $(dirname $dest_cfg); git add $(basename $dest_cfg) )
+                 sed "/^${src_whl//\//\\/}$/d" -i $src_cfg
+                 ( cd $(dirname $src_cfg); git add $(basename $src_cfg) )
+            fi
+        done
+    done
+}
+
+fixup_image.inc () {
+    local src_repo=$1
+    local dest_repo=$2
+    local src_cfg=""
+    local dest_cfg=""
+    local mapping=""
+    local src_pkg=""
+    local dest_pkg=""
+
+    for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_iso_image.inc" -o -name "${OS}_guest_image*.inc"); do
+        dest_cfg="$dest_repo/$(basename $src_cfg)"
+        for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
+            src_pkg=$(basename ${mapping%#*})
+            dest_pkg=$(basename ${mapping##*#})
+            if grep -q "^$src_pkg$" $src_cfg; then
+                 grep "^$src_pkg$" $src_cfg | sed "s#^$src_pkg\$#$dest_pkg#" >> $dest_cfg
+                 ( cd $(dirname $dest_cfg); git add $(basename $dest_cfg) )
+                 sed "/^${src_pkg//\//\\/}$/d" -i $src_cfg
+                 ( cd $(dirname $src_cfg); git add $(basename $src_cfg) )
+            fi
+        done
+    done
+}
+
+fixup_helm.inc () {
+    local src_repo=$1
+    local dest_repo=$2
+    local src_cfg=""
+    local dest_cfg=""
+    local mapping=""
+
+    # for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_helm.inc"); do
+    # done
+    return 0
+}
+
+fixup_commit () {
+    local src_repo=$1
+    local dest_repo=$2
+    local mapping=""
+    local src_paths=""
+    local dest_paths=""
+
+    for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
+        src_paths+="${mapping%#*} "
+        dest_paths+="${mapping##*#} "
+    done
+
+    (
+        cd $src_repo
+        stagged=$(git diff --name-only --cached)
+        if [ "$stagged" != "" ]; then
+            git commit -m "Config file changes to remove '$src_paths' after relocation to '$dest_repo'"
+        fi
+    )
+    (
+        cd $dest_repo
+        stagged=$(git diff --name-only --cached)
+        if [ "$stagged" != "" ]; then
+            git commit -m "Config file changes to add '$dest_paths' after relocation from '$src_repo'"
+        fi
+    )
+}
+
+OS="centos"
 declare -A rewrite_list
 declare -A filter_list
+declare -A path_mapping_list
 declare -A src_repo_list
 declare -A is_virgin
 
@@ -161,8 +268,22 @@ while IFS="|" read src_repo src_path dest_repo dest_path; do
         src_repo_list["$dest_repo"]+="$src_repo "
     fi
 
-    filter_list["$src_repo#$dest_repo"]+="$src_path "
-    rewrite_list["$dest_repo"]+="s|\t$src_path/|\t$dest_path/|;"
+    filter_list["$src_repo#$dest_repo"]+="^$src_path "
+
+    if [ "$src_path" != "." ]; then
+        if [ "$dest_path" != "." ]; then
+            rewrite_list["$dest_repo"]+="s|\t$src_path/|\t$dest_path/|;"
+            path_mapping_list["$src_repo#$dest_repo"]+="$src_path#$dest_path "
+        else
+            rewrite_list["$dest_repo"]+="s|\t$src_path/|\t|;"
+        fi
+    else
+        if [ "$dest_path" != "." ]; then
+            rewrite_list["$dest_repo"]+="s|\t|\t$dest_path/|;"
+            rewrite_list["$dest_repo"]+="s|^\([^#]*\)$|$dest_path/\1|;"
+        fi
+    fi
+
     line=$((line + 1))
 done < "$MAPFILE"
 
@@ -175,13 +296,14 @@ if [ ${#src_repo_list[@]} -eq 0 ]; then
     exit 1
 fi
 
+
 #
 # Check the data looks good. 
 #
 for key in "${!filter_list[@]}"; do
     src_repo=${key%#*}
     dest_repo=${key##*#}
-    src_path=${filter_list[$key]}
+    src_path=${filter_list[$key]//^/}
 
     if [ "$src_repo" == "" ]; then
         echo "Error: No src_repo, skipping key=${key} of filter_list"
@@ -199,7 +321,6 @@ for key in "${!filter_list[@]}"; do
     fi
 
     if [ ! -d ${src_repo}/${src_path} ]; then
-ls -al ${src_repo}/${src_path}
         echo "ERROR: directory not found, src_path='$src_path' within src_repo='$src_repo'"
         exit 1
     fi
@@ -252,7 +373,7 @@ for key in "${!rewrite_list[@]}"; do
     dest_repo=${key}
 
     if [ "$dest_repo" == "" ]; then
-        echo "Error: No dest_repo, skipping key=${key} of rewrite_list"
+        echo "ERROR: No dest_repo, skipping key=${key} of rewrite_list"
         exit 1
     fi
 
@@ -279,12 +400,26 @@ for key in "${!rewrite_list[@]}"; do
 done
 
 #
+# Fix config files to reflect the package movements
+#
+for key in "${!path_mapping_list[@]}"; do
+    src_repo=${key%#*}
+    dest_repo=${key##*#}
+
+    fixup_pkg_dirs $src_repo $dest_repo
+    fixup_wheels_inc $src_repo $dest_repo
+    fixup_image.inc $src_repo $dest_repo
+    fixup_helm.inc $src_repo $dest_repo
+    fixup_commit $src_repo $dest_repo
+done
+
+#
 # Remove relocated subdirectories from the source repos.
 #
 for key in "${!filter_list[@]}"; do
     src_repo=${key%#*}
     dest_repo=${key##*#}
-    src_paths=${filter_list[$key]}
+    src_paths=${filter_list[$key]//^/}
 
     (
         cd $src_repo
