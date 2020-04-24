@@ -230,7 +230,7 @@ create_branch () {
     current=$(current_branch)
     if [ "$current" != "$branch" ]; then
         if is_repo_controlled .; then
-            repo start $branch
+            repo start --head $branch
         else
             git checkout -b $branch
         fi
@@ -251,6 +251,7 @@ function filter_repo {
     # Source repo changed, batch up the filters for the last one and do it
     if [[ ! -d $dest_repo/$work_dir ]]; then
         # Start with a copy of the source repo as the filter process is destructive
+        mkdir -p $dest_repo/$(dirname $work_dir)
         cp -pLr $src_repo $dest_repo/$work_dir
 
         # Ensure no previous backup exists
