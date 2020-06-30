@@ -3,7 +3,7 @@
 # Extract subtrees from a git repository(s) and move them into a new or
 # othe pre-existing repository.
 #
-# split-repo.sh new-repo.map [branch]
+# split-repo.sh --map-file new-repo.map [--modified-repo-branch branch] [--new-repo-branch new-branch]
 #
 # The map file has four parts per line separated by a pipe ('|') character.
 # The four fields are:
@@ -249,7 +249,7 @@ function filter_repo {
     local filter_list="$@"
 
     # initial work is done in <new-repo>/<src-repo>.old_repo
-    work_dir=$(basename ${src_repo}).old_repo
+    work_dir=$(basename $src_repo).old_repo
 
     # Source repo changed, batch up the filters for the last one and do it
     if [[ ! -d ${dest_repo}/${work_dir} ]]; then
@@ -552,6 +552,9 @@ target_pkg_list () {
     local target_pkg=$1
     local spec=$2
 
+    if [ -z ${spec} ]; then
+        return 0
+    fi
     grep "^%package -n %{name}" ${spec} | sed "s#%package -n %{name}#${target_pkg}#"
     grep "^%package -n ${target_pkg}" ${spec} | sed "s#%package -n ${target_pkg}#${target_pkg}#"
 }
