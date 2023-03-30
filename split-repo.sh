@@ -350,6 +350,7 @@ fixup_spec () {
     local dest_spec=""
     local from_name=""
     local to_name=""
+    local OS=""
 
     for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
         src_path=${mapping%#*}
@@ -361,14 +362,16 @@ fixup_spec () {
             continue
         fi
 
-        for dest_spec in $(find $dest_repo/$dest_path/${OS} -maxdepth 1 -type f -name '*.spec'); do
-            if grep -q "$from_name" $dest_spec; then
-                 sed -e "s#^Name: $from_name\$#Name: $to_name#" \
-                     -e "s#^Summary: $from_name#Summary: $to_name#" \
-                     -e "s#^\(%[a-z]* -n \)$from_name#\1$to_name#" \
-                     -i $dest_spec
-                 ( cd $(dirname $dest_spec); git add $(basename $dest_spec) )
-            fi
+        for OS in ${OS_LIST}; do
+            for dest_spec in $(find $dest_repo/$dest_path/${OS} -maxdepth 1 -type f -name '*.spec'); do
+                if grep -q "$from_name" $dest_spec; then
+                     sed -e "s#^Name: $from_name\$#Name: $to_name#" \
+                         -e "s#^Summary: $from_name#Summary: $to_name#" \
+                         -e "s#^\(%[a-z]* -n \)$from_name#\1$to_name#" \
+                         -i $dest_spec
+                     ( cd $(dirname $dest_spec); git add $(basename $dest_spec) )
+                fi
+            done
         done
     done
 }
@@ -398,6 +401,7 @@ fixup_client_spec () {
 echo "fixup_client_spec: processing $from_name to $to_name"
 
         for spec in $(find . -type f -name '*.spec'); do
+            OS=$(basename $(dirname ${spec}))
             if echo $spec | grep -q $dest_repo/$dest_path/${OS}; then
                 # Our own spec, not a client
 echo "    skip own spec $spec"
@@ -467,20 +471,22 @@ fixup_build_srpm_data () {
             continue
         fi
 
-        for dest_data in $(find $dest_repo/$dest_path/${OS} -maxdepth 1 -type f -name 'build_srpm.data'); do
-            if grep -q "$from_name" $dest_data; then
-                 sed -e "s#^SRC_DIR=\"$from_name#SRC_DIR=\"$to_name#" \
-                     -e "s#^SRC_DIR=\"\$PKG_BASE/$from_name#SRC_DIR=\"\$PKG_BASE/$to_name#" \
-                     -e "s#^SRC_DIR=$from_name#SRC_DIR=$to_name#" \
-                     -e "s#^SRC_DIR=\$PKG_BASE/$from_name#SRC_DIR=\$PKG_BASE/$to_name#" \
-                     -e "s#^TAR_NAME=\"$from_name\"#TAR_NAME=\"$to_name\"#" \
-                     -e "s#^TAR_NAME=$from_name#TAR_NAME=$to_name#" \
-                     -e "s#^COPY_LIST=\"$from_name#COPY_LIST=\"$to_name#" \
-                     -e "s#^COPY_LIST=\"\$PKG_BASE/$from_name#COPY_LIST=\"\$PKG_BASE/$to_name#" \
-                     -e "s# \$PKG_BASE/$from_name# \$PKG_BASE/$to_name#" \
-                     -i $dest_data
-                 ( cd $(dirname $dest_spec); git add $(basename $dest_data) )
-            fi   
+        for OS in ${OS_LIST}; do
+            for dest_data in $(find $dest_repo/$dest_path/${OS} -maxdepth 1 -type f -name 'build_srpm.data'); do
+                if grep -q "$from_name" $dest_data; then
+                     sed -e "s#^SRC_DIR=\"$from_name#SRC_DIR=\"$to_name#" \
+                         -e "s#^SRC_DIR=\"\$PKG_BASE/$from_name#SRC_DIR=\"\$PKG_BASE/$to_name#" \
+                         -e "s#^SRC_DIR=$from_name#SRC_DIR=$to_name#" \
+                         -e "s#^SRC_DIR=\$PKG_BASE/$from_name#SRC_DIR=\$PKG_BASE/$to_name#" \
+                         -e "s#^TAR_NAME=\"$from_name\"#TAR_NAME=\"$to_name\"#" \
+                         -e "s#^TAR_NAME=$from_name#TAR_NAME=$to_name#" \
+                         -e "s#^COPY_LIST=\"$from_name#COPY_LIST=\"$to_name#" \
+                         -e "s#^COPY_LIST=\"\$PKG_BASE/$from_name#COPY_LIST=\"\$PKG_BASE/$to_name#" \
+                         -e "s# \$PKG_BASE/$from_name# \$PKG_BASE/$to_name#" \
+                         -i $dest_data
+                     ( cd $(dirname $dest_spec); git add $(basename $dest_data) )
+                fi   
+            done
         done
     done
 }
@@ -493,18 +499,21 @@ fixup_pkg_dirs () {
     local mapping=""
     local src_path=""
     local dest_path=""
+    local OS=""
 
-    for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_pkg_dirs*"); do
-        dest_cfg="$dest_repo/$(basename $src_cfg)"
-        for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
-            src_path=${mapping%#*}
-            dest_path=${mapping##*#}
-            if grep -q "^$src_path$" $src_cfg; then
-                 grep "^$src_path$" $src_cfg | sed "s#^$src_path\$#$dest_path#" >> $dest_cfg
-                 ( cd $(dirname $dest_cfg); git add $(basename $dest_cfg) )
-                 sed "/^${src_path//\//\\/}$/d" -i $src_cfg
-                 ( cd $(dirname $src_cfg); git add $(basename $src_cfg) )
-            fi
+    for OS in ${OS_LIST}; do
+        for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_pkg_dirs*"); do
+            dest_cfg="$dest_repo/$(basename $src_cfg)"
+            for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
+                src_path=${mapping%#*}
+                dest_path=${mapping##*#}
+                if grep -q "^$src_path$" $src_cfg; then
+                     grep "^$src_path$" $src_cfg | sed "s#^$src_path\$#$dest_path#" >> $dest_cfg
+                     ( cd $(dirname $dest_cfg); git add $(basename $dest_cfg) )
+                     sed "/^${src_path//\//\\/}$/d" -i $src_cfg
+                     ( cd $(dirname $src_cfg); git add $(basename $src_cfg) )
+                fi
+            done
         done
     done
 }
@@ -517,18 +526,21 @@ fixup_wheels_inc () {
     local mapping=""
     local src_whl=""
     local dest_whl=""
+    local OS=""
 
-    for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_*_wheels.inc"); do
-        dest_cfg="$dest_repo/$(basename $src_cfg)"
-        for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
-            src_whl=$(basename ${mapping%#*})-wheels
-            dest_whl=$(basename ${mapping##*#})-wheels
-            if grep -q "^$src_whl$" $src_cfg; then
-                 grep "^$src_whl$" $src_cfg | sed "s#^$src_whl\$#$dest_whl#" >> $dest_cfg
-                 ( cd $(dirname $dest_cfg); git add $(basename $dest_cfg) )
-                 sed "/^${src_whl//\//\\/}$/d" -i $src_cfg
-                 ( cd $(dirname $src_cfg); git add $(basename $src_cfg) )
-            fi
+    for OS in ${OS_LIST}; do
+        for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_*_wheels.inc"); do
+            dest_cfg="$dest_repo/$(basename $src_cfg)"
+            for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
+                src_whl=$(basename ${mapping%#*})-wheels
+                dest_whl=$(basename ${mapping##*#})-wheels
+                if grep -q "^$src_whl$" $src_cfg; then
+                     grep "^$src_whl$" $src_cfg | sed "s#^$src_whl\$#$dest_whl#" >> $dest_cfg
+                     ( cd $(dirname $dest_cfg); git add $(basename $dest_cfg) )
+                     sed "/^${src_whl//\//\\/}$/d" -i $src_cfg
+                     ( cd $(dirname $src_cfg); git add $(basename $src_cfg) )
+                fi
+            done
         done
     done
 }
@@ -556,35 +568,38 @@ fixup_image_inc () {
     local dest_path=""
     local extra_src_pkg=""
     local extra_dest_pkg=""
+    local OS=""
 
-    for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_iso_image.inc" -o -name "${OS}_guest_image*.inc"); do
-        dest_cfg="$dest_repo/$(basename $src_cfg)"
-        for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
-            src_path=${mapping%#*}
-            dest_path=${mapping##*#}
-            src_pkg=$(basename ${src_path})
-            dest_pkg=$(basename ${dest_path})
-
-            if grep -q "^${src_pkg}$" $src_cfg; then
-                grep "^# ${src_pkg}$" $src_cfg | sed "s%^# ${src_pkg}\$%\n# ${dest_pkg}%" >> ${dest_cfg}
-                grep "^${src_pkg}$" $src_cfg | sed "s#^${src_pkg}\$#${dest_pkg}#" >> ${dest_cfg}
-                ( cd $(dirname ${dest_cfg}); git add $(basename ${dest_cfg}) )
-                sed "/^# ${src_pkg//\//\\/}$/d" -i ${src_cfg}
-                sed "/^${src_pkg//\//\\/}$/d" -i ${src_cfg}
-                ( cd $(dirname ${src_cfg}); git add $(basename ${src_cfg}) )
-            fi
-
-            for dest_spec in $(find ${dest_repo}/${dest_path}/${OS} -maxdepth 1 -type f -name '*.spec'); do
-                # for extra_src_pkg in $(grep "^%package -n %{name}" ${dest_spec} | sed "s#%package -n %{name}#${src_pkg}#"; \
-                #                        grep "^%package -n ${src_pkg}" ${dest_spec} | sed "s#%package -n ${src_pkg}#${src_pkg}#"); do
-                for extra_src_pkg in $(target_pkg_list "${src_pkg}" "${dest_spec}"); do
-                    extra_dest_pkg=${extra_src_pkg/#${src_pkg}/${dest_pkg}}
-                    if grep -q "^${extra_src_pkg}$" $src_cfg; then
-                        grep "^${extra_src_pkg}$" $src_cfg | sed "s#^${extra_src_pkg}\$#${extra_dest_pkg}#" >> ${dest_cfg}
-                        ( cd $(dirname ${dest_cfg}); git add $(basename ${dest_cfg}) )
-                        sed "/^${extra_src_pkg//\//\\/}$/d" -i ${src_cfg}
-                        ( cd $(dirname ${src_cfg}); git add $(basename ${src_cfg}) )
-                    fi
+    for OS in ${OS_LIST}; do
+        for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_iso_image.inc" -o -name "${OS}_guest_image*.inc"); do
+            dest_cfg="$dest_repo/$(basename $src_cfg)"
+            for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
+                src_path=${mapping%#*}
+                dest_path=${mapping##*#}
+                src_pkg=$(basename ${src_path})
+                dest_pkg=$(basename ${dest_path})
+    
+                if grep -q "^${src_pkg}$" $src_cfg; then
+                    grep "^# ${src_pkg}$" $src_cfg | sed "s%^# ${src_pkg}\$%\n# ${dest_pkg}%" >> ${dest_cfg}
+                    grep "^${src_pkg}$" $src_cfg | sed "s#^${src_pkg}\$#${dest_pkg}#" >> ${dest_cfg}
+                    ( cd $(dirname ${dest_cfg}); git add $(basename ${dest_cfg}) )
+                    sed "/^# ${src_pkg//\//\\/}$/d" -i ${src_cfg}
+                    sed "/^${src_pkg//\//\\/}$/d" -i ${src_cfg}
+                    ( cd $(dirname ${src_cfg}); git add $(basename ${src_cfg}) )
+                fi
+    
+                for dest_spec in $(find ${dest_repo}/${dest_path}/${OS} -maxdepth 1 -type f -name '*.spec'); do
+                    # for extra_src_pkg in $(grep "^%package -n %{name}" ${dest_spec} | sed "s#%package -n %{name}#${src_pkg}#"; \
+                    #                        grep "^%package -n ${src_pkg}" ${dest_spec} | sed "s#%package -n ${src_pkg}#${src_pkg}#"); do
+                    for extra_src_pkg in $(target_pkg_list "${src_pkg}" "${dest_spec}"); do
+                        extra_dest_pkg=${extra_src_pkg/#${src_pkg}/${dest_pkg}}
+                        if grep -q "^${extra_src_pkg}$" $src_cfg; then
+                            grep "^${extra_src_pkg}$" $src_cfg | sed "s#^${extra_src_pkg}\$#${extra_dest_pkg}#" >> ${dest_cfg}
+                            ( cd $(dirname ${dest_cfg}); git add $(basename ${dest_cfg}) )
+                            sed "/^${extra_src_pkg//\//\\/}$/d" -i ${src_cfg}
+                            ( cd $(dirname ${src_cfg}); git add $(basename ${src_cfg}) )
+                        fi
+                    done
                 done
             done
         done
@@ -655,7 +670,7 @@ fixup_commit () {
     )
 }
 
-OS="centos"
+OS_LIST="centos debian"
 declare -A rewrite_list
 declare -A filter_list
 declare -A path_mapping_list
@@ -697,7 +712,7 @@ while IFS="|" read src_repo src_path dest_repo dest_path; do
             rewrite_list["$dest_repo"]+="s|\t$src_path/|\t$dest_path/|;"
             path_mapping_list["$src_repo#$dest_repo"]+="$src_path#$dest_path "
 
-            # sed patter to rewrite foo/foo to bar/bar ...
+            # sed pattern to rewrite foo/foo to bar/bar ...
             # Ok, really we are rewriting bar/foo/ to bar/bar/
             # because the lower directory was rewriten by the first rule
             alt_src_path=$src_path/$(basename $src_path)
@@ -707,25 +722,29 @@ while IFS="|" read src_repo src_path dest_repo dest_path; do
                 rewrite_list["$dest_repo"]+="s|\t$alt_intermediate_path/|\t$alt_dest_path/|;"
             fi
 
-            # sed patter to rewrite foo/centos/foo to bar/centos/bar ...
+            # sed pattern to rewrite foo/centos/foo to bar/centos/bar ...
             # Ok, really we are rewriting bar/centos/foo/ to bar/centos/bar/
             # because the lower directory was rewriten by the first rule
-            alt_src_path=$src_path/${OS}/$(basename $src_path)
-            alt_intermediate_path=$dest_path/${OS}/$(basename $src_path)
-            alt_dest_path=$dest_path/${OS}/$(basename $dest_path)
-            if [ -d $src_repo/$alt_src_path ]; then
-                rewrite_list["$dest_repo"]+="s|\t$alt_intermediate_path/|\t$alt_dest_path/|;"
-            fi
+            for OS in ${OS_LIST}; do
+                alt_src_path=$src_path/${OS}/$(basename $src_path)
+                alt_intermediate_path=$dest_path/${OS}/$(basename $src_path)
+                alt_dest_path=$dest_path/${OS}/$(basename $dest_path)
+                if [ -d $src_repo/$alt_src_path ]; then
+                    rewrite_list["$dest_repo"]+="s|\t$alt_intermediate_path/|\t$alt_dest_path/|;"
+                fi
+            done
 
-            # sed patter to rewrite foo/centos/foo.spec to bar/centos/bar.spec ...
+            # sed pattern to rewrite foo/centos/foo.spec to bar/centos/bar.spec ...
             # Ok, really we are rewriting bar/centos/foo.spec to bar/centos/bar.spec
             # because the lower directory was rewriten by the first rule
-            alt_src_path=$src_path/${OS}/$(basename $src_path).spec
-            alt_intermediate_path=$dest_path/${OS}/$(basename $src_path).spec
-            alt_dest_path=$dest_path/${OS}/$(basename $dest_path).spec
-            if [ -f $src_repo/$alt_src_path ]; then
-                rewrite_list["$dest_repo"]+="s|\t$alt_intermediate_path/|\t$alt_dest_path/|;"
-            fi
+            for OS in ${OS_LIST}; do
+                alt_src_path=$src_path/${OS}/$(basename $src_path).spec
+                alt_intermediate_path=$dest_path/${OS}/$(basename $src_path).spec
+                alt_dest_path=$dest_path/${OS}/$(basename $dest_path).spec
+                if [ -f $src_repo/$alt_src_path ]; then
+                    rewrite_list["$dest_repo"]+="s|\t$alt_intermediate_path/|\t$alt_dest_path/|;"
+                fi
+            done
 
         else
             # If we are moving 'foo' to '.', it isn't a conventional package, so keep it simple
