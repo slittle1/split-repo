@@ -42,9 +42,12 @@ OSLO_TOOLS=${OSLO_TOOLS:-""}
 OSLO_FILTER_SCRIPT=filter_git_history.sh
 OSLO_TOOLS_REPO=https://opendev.org/openstack/oslo.tools.git
 
-if [[ -d ${OSLO_TOOLS} && -x ${OSLO_TOOLS}/${OSLO_FILTER_SCRIPT} ]]; then
-    # found it!
-    OSLO_FILTER_CMD=${OSLO_TOOLS}/${OSLO_FILTER_SCRIPT}
+if [[ -d ${OSLO_TOOLS} ]]; then
+    OSLO_FILTER_CMD=$(find ${OSLO_TOOLS} -name ${OSLO_FILTER_SCRIPT} | head -n 1)
+    if [[ ${OSLO_TOOLS} == "" ]] || [[ ! -x ${OSLO_FILTER_CMD} ]]; then
+        echo "${OSLO_FILTER_SCRIPT} was not found under ${OSLO_TOOLS}."
+        exit 1
+    fi
 else
     OSLO_FILTER_CMD=$(which ${OSLO_FILTER_SCRIPT})
     if [[ "$OSLO_FILTER_CMD" == "" ]]; then
@@ -260,7 +263,7 @@ function filter_repo {
         (
             cd $dest_repo/$work_dir
             git checkout -b $modified_branch || true
-            ${OSLO_TOOLS}/filter_git_history.sh $filter_list
+            ${OSLO_FILTER_CMD} $filter_list
         )
     fi
 }
