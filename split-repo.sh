@@ -10,7 +10,7 @@
 # 1) Path to the root of the source repository
 # 2) Relative path to the subdirectory within the source repository that is
 #    to be moved
-# 3) Path to the roo of the destination repository. If non-existant, a new repo
+# 3) Path to the root of the destination repository. If non-existant, a new repo
 #    will be created.
 # 4) Relative path under the destination repository where the relocated subtree
 #    is to be placed.
@@ -249,21 +249,21 @@ function filter_repo {
     local filter_list="$@"
 
     # initial work is done in <new-repo>/<src-repo>.old_repo
-    work_dir=$src_repo.old_repo
+    work_dir=$(basename ${src_repo}).old_repo
 
     # Source repo changed, batch up the filters for the last one and do it
-    if [[ ! -d $dest_repo/$work_dir ]]; then
+    if [[ ! -d ${dest_repo}/${work_dir} ]]; then
         # Start with a copy of the source repo as the filter process is destructive
-        cp -pLr $src_repo $dest_repo/$work_dir
+        cp -pLr ${src_repo} ${dest_repo}/${work_dir}
 
         # Ensure no previous backup exists
-        rm -rf $dest_repo/$work_dir/.git/packed_refs $dest_repo/$work_dir/.git/refs/original
+        rm -rf ${dest_repo}/${work_dir}/.git/packed_refs ${dest_repo}/${work_dir}/.git/refs/original
 
         # Filter it
         (
-            cd $dest_repo/$work_dir
-            git checkout -b $modified_branch || true
-            ${OSLO_FILTER_CMD} $filter_list
+            cd ${dest_repo}/${work_dir}
+            git checkout -b ${modified_branch} || true
+            ${OSLO_FILTER_CMD} ${filter_list}
         )
     fi
 }
@@ -279,7 +279,7 @@ function merge_repo {
             continue
         fi
 
-        work_dir="${src_repo}.old_repo"
+        work_dir=$(basename ${src_repo}).old_repo
         tmp_remote="tmp-${src_repo}"
         merge_from="$tmp_remote/$modified_branch "
         merge_msg="Merge select content originating from repo '$src_repo'"
