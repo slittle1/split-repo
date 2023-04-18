@@ -579,11 +579,11 @@ fixup_image_inc () {
                 src_pkg=$(basename ${src_path})
                 dest_pkg=$(basename ${dest_path})
     
-                if grep -q "^${src_pkg}$" $src_cfg; then
-                    grep "^# ${src_pkg}$" $src_cfg | sed "s%^# ${src_pkg}\$%\n# ${dest_pkg}%" >> ${dest_cfg}
+                if egrep -q "^#? ?${src_pkg}$" $src_cfg; then
+                    egrep "^# ?${src_pkg}$" $src_cfg | sed -E "s%^# ?${src_pkg}\$%\n# ${dest_pkg}%" >> ${dest_cfg}
                     grep "^${src_pkg}$" $src_cfg | sed "s#^${src_pkg}\$#${dest_pkg}#" >> ${dest_cfg}
                     ( cd $(dirname ${dest_cfg}); git add $(basename ${dest_cfg}) )
-                    sed "/^# ${src_pkg//\//\\/}$/d" -i ${src_cfg}
+                    sed -E "/^# ?${src_pkg//\//\\/}$/d" -i ${src_cfg}
                     sed "/^${src_pkg//\//\\/}$/d" -i ${src_cfg}
                     ( cd $(dirname ${src_cfg}); git add $(basename ${src_cfg}) )
                 fi
