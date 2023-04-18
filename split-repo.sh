@@ -556,6 +556,42 @@ target_pkg_list () {
     grep "^%package -n ${target_pkg}" ${spec} | sed "s#%package -n ${target_pkg}#${target_pkg}#"
 }
 
+fixup_docker_image_inc () {
+    local src_repo=$1
+    local dest_repo=$2
+    local src_cfg=""
+    local dest_cfg=""
+    local mapping=""
+    local src_pkg=""
+    local dest_pkg=""
+    local src_path=""
+    local dest_path=""
+    local extra_src_pkg=""
+    local extra_dest_pkg=""
+    local OS=""
+
+    for OS in ${OS_LIST} distroless; do
+        for src_cfg in $(find $src_repo -maxdepth 1 -type f -name "${OS}_stable_docker_images.inc" -o -name "${OS}_dev_docker_images*.inc"); do
+            dest_cfg="$dest_repo/$(basename $src_cfg)"
+            for mapping in ${path_mapping_list["$src_repo#$dest_repo"]}; do
+                src_path=${mapping%#*}
+                dest_path=${mapping##*#}
+                src_pkg=$(basename ${src_path})
+                dest_pkg=$(basename ${dest_path})
+    
+                if egrep -q "^#? ?${src_pkg}$" $src_cfg; then
+                    egrep "^# ?${src_pkg}$" $src_cfg | sed -E "s%^# ?${src_pkg}\$%\n# ${dest_pkg}%" >> ${dest_cfg}
+                    grep "^${src_pkg}$" $src_cfg | sed "s#^${src_pkg}\$#${dest_pkg}#" >> ${dest_cfg}
+                    ( cd $(dirname ${dest_cfg}); git add $(basename ${dest_cfg}) )
+                    sed -E "/^# ?${src_pkg//\//\\/}$/d" -i ${src_cfg}
+                    sed "/^${src_pkg//\//\\/}$/d" -i ${src_cfg}
+                    ( cd $(dirname ${src_cfg}); git add $(basename ${src_cfg}) )
+                fi
+            done
+        done
+    done
+}
+
 fixup_image_inc () {
     local src_repo=$1
     local dest_repo=$2
@@ -909,6 +945,7 @@ for key in "${!path_mapping_list[@]}"; do
     fixup_pkg_dirs $src_repo $dest_repo
     fixup_wheels_inc $src_repo $dest_repo
     fixup_image_inc $src_repo $dest_repo
+    fixup_docker_image_inc $src_repo $dest_repo
     fixup_helm_inc $src_repo $dest_repo
     fixup_pkg_info $src_repo $dest_repo
     fixup_spec $src_repo $dest_repo
